@@ -8,10 +8,13 @@ import {
   Param,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { RolesService } from './roles.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 
+@ApiTags('Roles')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}

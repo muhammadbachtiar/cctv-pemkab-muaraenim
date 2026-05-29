@@ -8,6 +8,7 @@ import {
   Logger,
   Get,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public } from '../common/decorators/public.decorator';
@@ -25,6 +26,8 @@ interface MediaMtxAuthRequest {
   query?: string;
 }
 
+@ApiTags('MediaMTX')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/mediamtx')
 export class MediaMtxController {
   private readonly logger = new Logger(MediaMtxController.name);

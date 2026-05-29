@@ -8,11 +8,14 @@ import {
   Param,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CamerasService } from './cameras.service';
 import { CreateCameraDto, UpdateCameraDto, GrantAccessDto } from './dto/camera.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
+@ApiTags('Cameras')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/cameras')
 export class CamerasController {
   constructor(private readonly camerasService: CamerasService) {}

@@ -8,11 +8,14 @@ import {
   ParseUUIDPipe,
   Patch,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto, UpdateUserPasswordDto } from './dto/user.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
