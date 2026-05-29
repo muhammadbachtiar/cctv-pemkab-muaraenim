@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # ─────────────────────────────────────────
+  # NestJS Backend
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cctv_backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./backend/.env
+    networks:
+      - cctv_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/v1/auth/profile"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─────────────────────────────────────────
+  # MediaMTX (RTSP/HLS Media Server)
+  # ─────────────────────────────────────────
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: cctv_mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554"   # RTSP
+      - "8888:8888"   # HLS (digunakan di frontend)
+      - "9997:9997"   # HTTP API (internal, bisa dihilangkan di production)
+    volumes:
+      - ./mediamtx/mediamtx.yml:/mediamtx.yml
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cctv_network
+
+  # ─────────────────────────────────────────
+  # Next.js Frontend
+  # ─────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CCTV_DOMAIN: ${NEXT_PUBLIC_CCTV_DOMAIN:-http://localhost}
+    container_name: cctv_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_CCTV_DOMAIN=${NEXT_PUBLIC_CCTV_DOMAIN:-http://localhost}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - cctv_network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  cctv_network:
+    driver: bridge

@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model User {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  passwordHash  String
+  fullName      String?
+  roleId        String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  role          Role     @relation(fields: [roleId], references: [id])
+  cameraAccess  UserCameraAccess[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique  // admin, operator, viewer
+  description String?
+  createdAt   DateTime @default(now())
+
+  users       User[]
+  // MySQL/MariaDB tidak mendukung array, gunakan Json sebagai gantinya
+  // Format: ["camera:create", "camera:read", ...]
+  permissions Json     @default("[]")
+
+  @@map("roles")
+}
+
+model Camera {
+  id              String   @id @default(uuid())
+  name            String
+  path            String   @unique
+  rtspUrl         String   @db.Text
+  locationName    String?
+  latitude        Float?
+  longitude       Float?
+
+  isActive        Boolean  @default(true)
+  isPublic        Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userAccess      UserCameraAccess[]
+
+  @@map("cameras")
+}
+
+model UserCameraAccess {
+  id         String  @id @default(uuid())
+  userId     String
+  cameraId   String
+  canView    Boolean @default(true)
+
+  user       User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  camera     Camera  @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cameraId])
+  @@map("user_camera_access")
+}

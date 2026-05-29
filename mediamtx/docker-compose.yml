@@ -1,0 +1,31 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: mediamtx
+    restart: always
+    ports:
+      - "8554:8554"
+      - "1935:1935"
+      - "8888:8888"
+      - "8889:8889"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml
+    networks:
+      - cctv_network
+
+  webserver:
+    image: nginx:latest
+    container_name: cctv_webserver
+    ports:
+      - "80:80"
+    volumes:
+      - ./:/var/www
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - mediamtx
+    networks:
+      - cctv_network
+
+networks:
+  cctv_network:
+    driver: bridge
