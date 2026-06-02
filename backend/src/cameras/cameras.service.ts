@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Logger,
+  OnApplicationBootstrap,
   NotFoundException,
   ConflictException,
   ForbiddenException,
@@ -9,11 +11,79 @@ import { MediaMtxService } from '../mediamtx/mediamtx.service';
 import { CreateCameraDto, UpdateCameraDto, GrantAccessDto } from './dto/camera.dto';
 
 @Injectable()
-export class CamerasService {
+export class CamerasService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(CamerasService.name);
+
   constructor(
     private prisma: PrismaService,
     private mediaMtxService: MediaMtxService,
   ) {}
+
+  /**
+   * Lifecycle hook: dijalankan otomatis setelah semua modul NestJS selesai diinisialisasi.
+   * Mensinkronisasi semua kamera aktif dari database ke MediaMTX dengan retry.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    // Tunggu sebentar agar MediaMTX punya waktu untuk siap (keduanya start bersamaan)
+    const maxRetries = 5;
+    const delayMs = 5000; // 5 detik per retry
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const paths = await this.mediaMtxService.listPaths();
+        // Jika berhasil menghubungi MediaMTX, langsung sync
+        this.logger.log(`MediaMTX tersedia (attempt ${attempt}), memulai sinkronisasi...`);
+        await this.syncAllToMediaMtx();
+        return;
+      } catch {
+        if (attempt < maxRetries) {
+          this.logger.warn(
+            `MediaMTX belum siap (attempt ${attempt}/${maxRetries}), mencoba lagi dalam ${delayMs / 1000}s...`,
+          );
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        } else {
+          this.logger.error(
+            'MediaMTX tidak tersedia setelah beberapa percobaan. Sinkronisasi startup dibatalkan.',
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Mendaftarkan ulang semua kamera aktif dari database ke MediaMTX.
+   * Berguna ketika MediaMTX restart dan kehilangan konfigurasi path dinamis.
+   */
+  async syncAllToMediaMtx(): Promise<void> {
+    try {
+      const cameras = await this.prisma.camera.findMany({
+        where: { isActive: true },
+      });
+
+      if (cameras.length === 0) {
+        this.logger.log('Tidak ada kamera aktif untuk disinkronisasi ke MediaMTX');
+        return;
+      }
+
+      let successCount = 0;
+      for (const camera of cameras) {
+        try {
+          await this.mediaMtxService.upsertPath(camera.path, camera.rtspUrl);
+          successCount++;
+        } catch (err: any) {
+          this.logger.warn(
+            `Gagal sinkronisasi kamera "${camera.name}" (${camera.path}): ${err?.message}`,
+          );
+        }
+      }
+
+      this.logger.log(
+        `✅ Sinkronisasi MediaMTX selesai: ${successCount}/${cameras.length} kamera aktif berhasil didaftarkan`,
+      );
+    } catch (err: any) {
+      this.logger.error('Gagal menjalankan sinkronisasi MediaMTX saat startup', err?.message);
+    }
+  }
 
   /**
    * Mendapatkan semua kamera. Admin mendapat semua, user lain mendapat
