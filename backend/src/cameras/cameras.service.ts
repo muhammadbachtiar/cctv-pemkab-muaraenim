@@ -18,27 +18,36 @@ export class CamerasService {
   /**
    * Mendapatkan semua kamera. Admin mendapat semua, user lain mendapat
    * hanya kamera yang mereka miliki akses atau kamera publik.
+   * rtspUrl disembunyikan jika role bukan admin atau operator.
    */
   async findAll(userId: string, userRole: string) {
+    let cameras;
     if (userRole === 'admin') {
-      return this.prisma.camera.findMany({
+      cameras = await this.prisma.camera.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      cameras = await this.prisma.camera.findMany({
+        where: {
+          OR: [
+            { isPublic: true },
+            {
+              userAccess: {
+                some: { userId, canView: true },
+              },
+            },
+          ],
+        },
         orderBy: { createdAt: 'desc' },
       });
     }
 
-    return this.prisma.camera.findMany({
-      where: {
-        OR: [
-          { isPublic: true },
-          {
-            userAccess: {
-              some: { userId, canView: true },
-            },
-          },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Hanya admin dan operator yang diizinkan melihat URL RTSP asli
+    if (userRole !== 'admin' && userRole !== 'operator') {
+      return cameras.map(({ rtspUrl, ...rest }) => rest);
+    }
+
+    return cameras;
   }
 
   async findOne(id: string, userId: string, userRole: string) {
@@ -62,6 +71,12 @@ export class CamerasService {
       camera.userAccess.some((a) => a.userId === userId && a.canView);
 
     if (!hasAccess) throw new ForbiddenException('Anda tidak memiliki akses ke kamera ini');
+
+    // Hanya admin dan operator yang diizinkan melihat URL RTSP asli
+    if (userRole !== 'operator') {
+      const { rtspUrl, ...rest } = camera;
+      return rest;
+    }
 
     return camera;
   }
