@@ -15,7 +15,7 @@ services:
       - NODE_ENV=production
       - NEXT_PUBLIC_CCTV_DOMAIN=${NEXT_PUBLIC_CCTV_DOMAIN:-http://xxx.xxx.xxx.xxx}
     env_file:
-      - .env.local
+      - .env
     restart: unless-stopped
     networks:
       - cctv-network

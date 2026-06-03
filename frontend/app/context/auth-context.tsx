@@ -2,17 +2,28 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import { api } from "../utils/api";
 
-// Hardcoded credentials
-const VALID_CREDENTIALS = {
-  username: "admin",
-  password: "cctvmuaraenim",
-};
+interface UserRole {
+  id: string;
+  name: string;
+  permissions: string[] | string;
+}
+
+interface UserProfile {
+  id: string;
+  username: string;
+  fullName?: string;
+  role: UserRole;
+}
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: string | null;
-  login: (username: string, password: string) => boolean;
+  role: string | null;
+  permissions: string[];
+  hasPermission: (permission: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -22,24 +33,71 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState<string | null>(null);
+  const [role, setRole] = useState<string | null>(null);
+  const [permissions, setPermissions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
 
-  // Check session on mount
-  useEffect(() => {
-    const storedUser = localStorage.getItem("cctv_user");
-    if (storedUser) {
-      setUser(storedUser);
-      setIsAuthenticated(true);
+  // Helper to parse permissions
+  const parsePermissions = (perms: any): string[] => {
+    if (!perms) return [];
+    if (Array.isArray(perms)) return perms;
+    if (typeof perms === "string") {
+      try {
+        return JSON.parse(perms);
+      } catch {
+        return [];
+      }
     }
-    setIsLoading(false);
+    return [];
+  };
+
+  // Load session on mount
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem("accessToken");
+      const storedUser = localStorage.getItem("cctv_user");
+      const storedRole = localStorage.getItem("cctv_role");
+      const storedPerms = localStorage.getItem("cctv_permissions");
+
+      if (token && storedUser) {
+        setUser(storedUser);
+        setRole(storedRole);
+        setPermissions(parsePermissions(storedPerms));
+        setIsAuthenticated(true);
+
+        // Fetch fresh profile from server in background to sync state
+        try {
+          const profile = await api.get<UserProfile>("/api/v1/auth/profile");
+          const displayName = profile.fullName || profile.username;
+          const userPerms = parsePermissions(profile.role.permissions);
+
+          localStorage.setItem("cctv_user", displayName);
+          localStorage.setItem("cctv_role", profile.role.name);
+          localStorage.setItem("cctv_permissions", JSON.stringify(userPerms));
+
+          setUser(displayName);
+          setRole(profile.role.name);
+          setPermissions(userPerms);
+        } catch (err) {
+          console.error("Gagal sinkronisasi profil:", err);
+          // Jika token tidak valid / kedaluwarsa, api client akan otomatis me-logout
+        }
+      }
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
   // Redirect logic
   useEffect(() => {
     if (!isLoading) {
-      if (!isAuthenticated && pathname !== "/login") {
+      const publicPaths = ["/login", "/publik", "/public", "/"];
+      const isPublicPath = publicPaths.includes(pathname);
+
+      if (!isAuthenticated && !isPublicPath) {
         router.push("/login");
       } else if (isAuthenticated && pathname === "/login") {
         router.push("/dashboard");
@@ -47,29 +105,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isLoading, pathname, router]);
 
-  const login = (username: string, password: string): boolean => {
-    if (
-      username === VALID_CREDENTIALS.username &&
-      password === VALID_CREDENTIALS.password
-    ) {
-      localStorage.setItem("cctv_user", username);
-      setUser(username);
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const response = await api.post<{
+        accessToken: string;
+        user: UserProfile;
+      }>("/api/v1/auth/login", { username, password });
+
+      const displayName = response.user.fullName || response.user.username;
+      const userPerms = parsePermissions(response.user.role.permissions);
+
+      localStorage.setItem("accessToken", response.accessToken);
+      localStorage.setItem("cctv_user", displayName);
+      localStorage.setItem("cctv_role", response.user.role.name);
+      localStorage.setItem("cctv_permissions", JSON.stringify(userPerms));
+
+      setUser(displayName);
+      setRole(response.user.role.name);
+      setPermissions(userPerms);
       setIsAuthenticated(true);
+
       router.push("/dashboard");
       return true;
+    } catch (err: any) {
+      throw new Error(err?.message || "Gagal masuk ke sistem. Silakan periksa koneksi Anda.");
     }
-    return false;
   };
 
   const logout = () => {
+    localStorage.removeItem("accessToken");
     localStorage.removeItem("cctv_user");
+    localStorage.removeItem("cctv_role");
+    localStorage.removeItem("cctv_permissions");
+    
     setUser(null);
+    setRole(null);
+    setPermissions([]);
     setIsAuthenticated(false);
+    
     router.push("/login");
   };
 
+  const hasPermission = (permission: string): boolean => {
+    // Admin bypasses all permission checks
+    if (role === "admin") return true;
+    return permissions.includes(permission);
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated,
+        user,
+        role,
+        permissions,
+        hasPermission,
+        login,
+        logout,
+        isLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -14,6 +14,7 @@ WORKDIR /app
 
 # Accept build arguments
 ARG NEXT_PUBLIC_CCTV_DOMAIN
+ARG NEXT_PUBLIC_API_URL
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -23,6 +24,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_CCTV_DOMAIN=$NEXT_PUBLIC_CCTV_DOMAIN
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build the application
 RUN npm run build

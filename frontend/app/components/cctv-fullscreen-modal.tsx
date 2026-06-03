@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { CCTVItem } from "../config/cctv-data";
 
 interface CCTVFullscreenModalProps {
@@ -18,6 +18,69 @@ export default function CCTVFullscreenModal({
 }: CCTVFullscreenModalProps) {
   const [showControls, setShowControls] = useState(true);
   const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const hlsRef = useRef<any>(null);
+
+  // HLS.js Player initialization
+  useEffect(() => {
+    if (!isOpen || !cctv || !cctv.url) return;
+
+    let hls: any = null;
+
+    const initPlayer = async () => {
+      const video = videoRef.current;
+      if (!video) return;
+
+      let hlsUrl = cctv.url;
+      if (hlsUrl.endsWith("/")) hlsUrl += "index.m3u8";
+      if (!hlsUrl.includes(".m3u8")) hlsUrl += "/index.m3u8";
+
+      if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = hlsUrl;
+        video.play().catch(() => {});
+        return;
+      }
+
+      try {
+        const Hls = (await import("hls.js")).default;
+        if (!Hls.isSupported()) {
+          video.src = hlsUrl;
+          video.play().catch(() => {});
+          return;
+        }
+
+        hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          maxBufferLength: 10,
+          maxMaxBufferLength: 30,
+          startLevel: -1,
+        });
+
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          video.play().catch(() => {});
+        });
+
+        hlsRef.current = hls;
+      } catch {
+        video.src = hlsUrl;
+        video.play().catch(() => {});
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(initPlayer, 100);
+
+    return () => {
+      clearTimeout(timer);
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
+  }, [isOpen, cctv?.url]);
 
   // Handle ESC key to close fullscreen and manage body scroll
   useEffect(() => {
@@ -29,12 +92,12 @@ export default function CCTVFullscreenModal({
 
     if (isOpen) {
       document.addEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "hidden"; // Hide scrollbar
+      document.body.style.overflow = "hidden";
     }
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "unset"; // Restore scrollbar
+      document.body.style.overflow = "unset";
     };
   }, [isOpen, onClose]);
 
@@ -42,12 +105,10 @@ export default function CCTVFullscreenModal({
   const handleMouseMove = () => {
     setShowControls(true);
 
-    // Clear existing timeout
     if (hideTimeout) {
       clearTimeout(hideTimeout);
     }
 
-    // Set new timeout to hide controls after 2 seconds
     const timeout = setTimeout(() => {
       setShowControls(false);
     }, 2000);
@@ -67,25 +128,16 @@ export default function CCTVFullscreenModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black"
+      className="fixed inset-0 z-50 bg-black flex items-center justify-center"
       onMouseMove={handleMouseMove}
-      onClick={onClose}
     >
-      {/* Pure iframe - no borders, fills entire screen */}
-      <iframe
-        src={cctv.url}
-        title={cctv.name}
-        className="absolute inset-0 w-full h-full border-none"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen;"
-        allowFullScreen
-        onClick={(e) => e.stopPropagation()}
-      />
-
-      {/* Mouse Capture Overlay - Needed because iframe swallows mouse events */}
-      <div 
-        className="absolute inset-0 z-10 bg-transparent"
-        onMouseMove={handleMouseMove}
-        onClick={onClose}
+      {/* Video player - fills entire screen */}
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-contain bg-black"
+        autoPlay
+        muted
+        playsInline
       />
 
       {/* Floating controls - only visible on hover */}
@@ -96,19 +148,13 @@ export default function CCTVFullscreenModal({
       >
         {/* Change CCTV button */}
         <button
-          className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors"
+          className="flex items-center gap-2 bg-white/10 backdrop-blur-md border border-white/20 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/20 transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onChangeCCTV();
           }}
         >
-          <svg
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            width="18"
-            height="18"
-          >
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -121,19 +167,13 @@ export default function CCTVFullscreenModal({
 
         {/* Close button */}
         <button
-          className="flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white p-2 rounded-lg hover:bg-white/20 transition-colors"
+          className="flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white p-2 rounded-lg hover:bg-white/20 transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
         >
-          <svg
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            width="20"
-            height="20"
-          >
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"

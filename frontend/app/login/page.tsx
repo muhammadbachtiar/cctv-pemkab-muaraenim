@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useAuth } from "../context/auth-context";
 
 export default function LoginPage() {
@@ -16,14 +17,13 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
 
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const success = login(username, password);
-    if (!success) {
-      setError("Username atau password salah");
+    try {
+      await login(username, password);
+    } catch (err: any) {
+      setError(err?.message || "Username atau password salah");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   if (authLoading) {
@@ -128,7 +128,14 @@ export default function LoginPage() {
         </form>
 
         {/* Footer */}
-        <div className="mt-6 text-center text-slate-500 text-xs"></div>
+        <div className="mt-6 text-center text-slate-500 text-xs">
+          <Link href="/public" className="text-blue-600 hover:underline font-semibold flex items-center justify-center gap-1">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Kembali ke Portal Publik
+          </Link>
+        </div>
       </div>
     </div>
   );
