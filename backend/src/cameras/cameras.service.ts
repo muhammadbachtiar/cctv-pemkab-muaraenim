@@ -24,6 +24,9 @@ export class CamerasService implements OnApplicationBootstrap {
    * Mensinkronisasi semua kamera aktif dari database ke MediaMTX dengan retry.
    */
   async onApplicationBootstrap(): Promise<void> {
+    // Mulai loop sinkronisasi latar belakang secara berkala
+    this.startPeriodicSync();
+
     // Tunggu sebentar agar MediaMTX punya waktu untuk siap (keduanya start bersamaan)
     const maxRetries = 5;
     const delayMs = 5000; // 5 detik per retry
@@ -49,6 +52,49 @@ export class CamerasService implements OnApplicationBootstrap {
       }
     }
   }
+
+  /**
+   * Memulai pencocokan berkala antara database dan MediaMTX untuk memulihkan path jika MediaMTX restart.
+   */
+  startPeriodicSync(): void {
+    setInterval(async () => {
+      try {
+        const activeCameras = await this.prisma.camera.findMany({
+          where: { isActive: true },
+        });
+
+        if (activeCameras.length === 0) return;
+
+        const mediaMtxPaths = await this.mediaMtxService.listPaths();
+        const mediaMtxPathNames = mediaMtxPaths.map((p) => p.name);
+
+        const missingCameras = activeCameras.filter(
+          (camera) => !mediaMtxPathNames.includes(camera.path),
+        );
+
+        if (missingCameras.length > 0) {
+          this.logger.log(
+            `Background Sync: Mendeteksi ${missingCameras.length} kamera aktif hilang dari MediaMTX. Mendaftarkan ulang...`,
+          );
+          for (const camera of missingCameras) {
+            try {
+              await this.mediaMtxService.upsertPath(camera.path, camera.rtspUrl);
+              this.logger.log(
+                `Background Sync: Berhasil memulihkan kamera "${camera.name}" (${camera.path})`,
+              );
+            } catch (err: any) {
+              this.logger.warn(
+                `Background Sync: Gagal memulihkan kamera "${camera.name}" (${camera.path}): ${err?.message}`,
+              );
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.error('Background Sync: Gagal memproses sinkronisasi berkala MediaMTX', err?.message);
+      }
+    }, 30000); // Setiap 30 detik
+  }
+
 
   /**
    * Mendaftarkan ulang semua kamera aktif dari database ke MediaMTX.
@@ -118,6 +164,18 @@ export class CamerasService implements OnApplicationBootstrap {
     }
 
     return cameras;
+  }
+
+  async findPublic() {
+    const cameras = await this.prisma.camera.findMany({
+      where: {
+        isActive: true,
+        isPublic: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return cameras.map(({ rtspUrl, ...rest }) => rest);
   }
 
   async findOne(id: string, userId: string, userRole: string) {

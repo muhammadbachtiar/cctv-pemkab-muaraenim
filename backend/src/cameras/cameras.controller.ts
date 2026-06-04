@@ -13,12 +13,19 @@ import { CamerasService } from './cameras.service';
 import { CreateCameraDto, UpdateCameraDto, GrantAccessDto } from './dto/camera.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Cameras')
 @ApiBearerAuth('JWT-auth')
 @Controller('api/v1/cameras')
 export class CamerasController {
   constructor(private readonly camerasService: CamerasService) {}
+
+  @Get('public')
+  @Public()
+  findPublic() {
+    return this.camerasService.findPublic();
+  }
 
   @Get()
   @RequirePermissions('camera:read')
