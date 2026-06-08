@@ -25,6 +25,7 @@ interface AuthContextType {
   hasPermission: (permission: string) => boolean;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
+  updateUserDisplayName: (name: string) => void;
   isLoading: boolean;
 }
 
@@ -152,6 +153,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return permissions.includes(permission);
   };
 
+  const updateUserDisplayName = (name: string) => {
+    localStorage.setItem("cctv_user", name);
+    setUser(name);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -162,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hasPermission,
         login,
         logout,
+        updateUserDisplayName,
         isLoading,
       }}
     >

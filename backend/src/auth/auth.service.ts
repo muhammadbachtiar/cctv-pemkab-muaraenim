@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
-import { LoginDto, RegisterDto, ChangePasswordDto } from './dto/auth.dto';
+import { LoginDto, RegisterDto, ChangePasswordDto, UpdateProfileDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService {
@@ -101,6 +101,20 @@ export class AuthService {
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const { passwordHash: _, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException('User tidak ditemukan');
+
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { fullName: dto.fullName ?? user.fullName },
+      include: { role: true },
+    });
+
+    const { passwordHash: _, ...userWithoutPassword } = updated;
     return userWithoutPassword;
   }
 }

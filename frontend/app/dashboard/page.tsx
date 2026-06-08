@@ -15,12 +15,13 @@ import CCTVMap from "../components/cctv-map";
 import CameraManagement from "../components/camera-mgmt";
 import UserManagement from "../components/user-mgmt";
 import RoleManagement from "../components/role-mgmt";
+import Profile from "../components/profile";
 
 export default function DashboardPage() {
   const { user, role, hasPermission, logout, isLoading, isAuthenticated } = useAuth();
 
   // Tab control
-  const [activeTab, setActiveTab] = useState<"monitoring" | "map" | "cameras" | "users" | "roles">("monitoring");
+  const [activeTab, setActiveTab] = useState<"monitoring" | "map" | "cameras" | "users" | "roles" | "profile">("monitoring");
 
   // Grid/Layout states
   const [layout, setLayout] = useState<LayoutType>("2x2");
@@ -261,10 +262,14 @@ export default function DashboardPage() {
 
         {/* User Badge & Logout */}
         <div className="flex items-center gap-3 md:gap-4">
-          <div className="flex flex-col text-right">
+          <button
+            onClick={() => setActiveTab("profile")}
+            className="flex flex-col text-right hover:opacity-80 transition-opacity cursor-pointer"
+            title="Lihat Profil Saya"
+          >
             <span className="text-xs md:text-sm font-semibold text-slate-800">{user}</span>
             <span className="text-[9px] md:text-[10px] text-slate-400 font-semibold uppercase">{role}</span>
-          </div>
+          </button>
           <button
             className="flex items-center gap-1.5 bg-transparent border border-red-500 text-red-500 px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer hover:bg-red-500/10 transition-colors"
             onClick={logout}
@@ -414,8 +419,29 @@ export default function DashboardPage() {
             </nav>
           </div>
 
-          <div className="text-[10px] text-slate-400 pl-3 w-56 md:w-full">
-            v1.1.0 &bull; Muara Enim CCTV
+          {/* Profile Nav at bottom of sidebar */}
+          <div className="flex flex-col gap-2">
+            <div className="border-t border-slate-100 pt-3">
+              <button
+                onClick={() => {
+                  setActiveTab("profile");
+                  if (window.innerWidth < 768) setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer text-left ${activeTab === "profile"
+                  ? "bg-blue-50 text-blue-700 font-semibold"
+                  : "text-slate-600 hover:bg-slate-50"
+                  }`}
+              >
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Profil Saya
+              </button>
+            </div>
+
+            <div className="text-[10px] text-slate-400 pl-3 w-56 md:w-full">
+              v1.1.0 &bull; Muara Enim CCTV
+            </div>
           </div>
         </aside>
 
@@ -463,6 +489,11 @@ export default function DashboardPage() {
           {/* Tab 5: Roles Config */}
           {activeTab === "roles" && hasPermission("role:manage") && (
             <RoleManagement />
+          )}
+
+          {/* Tab 6: Profile */}
+          {activeTab === "profile" && (
+            <Profile />
           )}
         </main>
       </div>
