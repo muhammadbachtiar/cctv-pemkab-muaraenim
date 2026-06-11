@@ -13,7 +13,7 @@ import CCTVMap from "../components/cctv-map";
 
 export default function PublicCCTVPage() {
   const [activeTab, setActiveTab] = useState<"monitoring" | "map">("monitoring");
-  const [layout, setLayout] = useState<LayoutType>("2x2");
+  const [layout, setLayout] = useState<LayoutType>("3x3");
   const [selectedCCTVs, setSelectedCCTVs] = useState<(CCTVItem | null)[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useAuth } from "../context/auth-context";
 import { CCTVItem, LayoutType, layoutOptions } from "../config/cctv-data";
@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<"monitoring" | "map" | "cameras" | "users" | "roles" | "profile">("monitoring");
 
   // Grid/Layout states
-  const [layout, setLayout] = useState<LayoutType>("2x2");
+  const [layout, setLayout] = useState<LayoutType>("3x3");
   const [selectedCCTVs, setSelectedCCTVs] = useState<(CCTVItem | null)[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [currentSlot, setCurrentSlot] = useState<number>(0);
@@ -39,7 +39,14 @@ export default function DashboardPage() {
   const [cameras, setCameras] = useState<CCTVItem[]>([]);
   const [isCamerasLoading, setIsCamerasLoading] = useState(false);
 
+  const lastLoadedCameraIdsRef = useRef<string>("");
+
   const currentLayoutOption = layoutOptions.find((o) => o.value === layout);
+
+  const getSlotCount = () => {
+    const option = layoutOptions.find((o) => o.value === layout);
+    return option ? option.cols * option.cols : 9;
+  };
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -70,9 +77,16 @@ export default function DashboardPage() {
       const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN;
       const token = localStorage.getItem("accessToken");
 
+      const currentIds = fetched.map((c) => c.id).sort().join(",");
+      if (currentIds === lastLoadedCameraIdsRef.current) {
+        setIsCamerasLoading(false);
+        return;
+      }
+      lastLoadedCameraIdsRef.current = currentIds;
+
       const mapped: CCTVItem[] = fetched.map((cam) => ({
         ...cam,
-        location: cam.locationName, // compatibility
+        location: cam.locationName,
         url: cam.isPublic
           ? `${domain}/${cam.path}/`
           : `${domain}/${cam.path}/index.m3u8?cookieCheck=1&token=${token}`,
@@ -87,51 +101,46 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    if (!isAuthenticated || isCamerasLoading || cameras.length > 0) {
+      return;
+    }
     loadCameras();
-  }, [isAuthenticated]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, isCamerasLoading, cameras.length]);
 
-  // Refresh cameras list when switching back to monitoring or map tabs
+  // Fetch cameras when authentication is ready
   useEffect(() => {
-    if (activeTab === "monitoring" || activeTab === "map") {
+    if (isAuthenticated) {
       loadCameras();
     }
-  }, [activeTab]);
+  }, [isAuthenticated]);
 
-  // Get number of slots based on layout
-  const getSlotCount = () => {
-    const option = layoutOptions.find((o) => o.value === layout);
-    return option ? option.cols * option.cols : 4;
-  };
-
-  // Initialize slots when layout or cameras list changes
+  // Auto-fill slots on layout change, camera fetch, or authentication
   useEffect(() => {
+    if (!isAuthenticated || cameras.length === 0) return;
+    const activeCameras = cameras.filter((c) => c.isActive);
+    if (activeCameras.length === 0) return;
+
     const slotCount = getSlotCount();
-
-    // Filter out cameras that are no longer active/available in DB
-    const activeCameraIds = cameras.filter((c) => c.isActive).map((c) => c.id);
-
     setSelectedCCTVs((prev) => {
-      // Keep existing slots if they are still active in the database
-      const cleanedSlots = prev.map((slot) =>
-        slot && activeCameraIds.includes(slot.id) ? cameras.find(c => c.id === slot.id) || slot : null
+      const newSlots = [...prev];
+      // Keep existing slots that are still available and active
+      const cleanedSlots = newSlots.map((slot) =>
+        slot && activeCameras.some((c) => c.id === slot.id) ? activeCameras.find((c) => c.id === slot.id) || slot : null
       );
 
-      const newSlots = [...cleanedSlots];
-
-      // If we need more slots, add nulls or auto-fill with available cameras
-      while (newSlots.length < slotCount) {
-        const usedIds = newSlots.filter((c) => c !== null).map((c) => c!.id);
-        const availableCCTV = cameras
-          .filter((c) => c.isActive)
-          .find((c) => !usedIds.includes(c.id));
-
-        newSlots.push(availableCCTV || null);
+      const filledSlots = [...cleanedSlots];
+      while (filledSlots.length < slotCount) {
+        const usedIds = filledSlots.filter((c) => c !== null).map((c) => c!.id);
+        const availableCCTV = activeCameras.find((c) => !usedIds.includes(c.id));
+        filledSlots.push(availableCCTV || null);
       }
-
-      // If we have too many slots, trim
-      return newSlots.slice(0, slotCount);
+      return filledSlots.slice(0, slotCount);
     });
-  }, [layout, cameras]);
+  }, [isAuthenticated, layout, cameras]);
 
   const handleSelectCCTV = (cctv: CCTVItem) => {
     if (isFullscreen) {
