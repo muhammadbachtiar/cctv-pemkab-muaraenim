@@ -26,14 +26,19 @@ export class MediaMtxService {
    * Menambahkan atau mengupdate path kamera di MediaMTX
    */
   async upsertPath(path: string, rtspUrl: string): Promise<void> {
+    // Gunakan runOnDemand + FFmpeg untuk mengatasi FU-A packetization error
+    // dari firmware kamera yang tidak kompatibel dengan mode pull langsung.
+    // FFmpeg me-remux via TCP dan memperbaiki stream sebelum diteruskan ke MediaMTX.
+    const pathConfig = {
+      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnDemandRestart: true,
+    };
+
     try {
       await firstValueFrom(
-        this.httpService.post(`${this.apiUrl}/v3/config/paths/add/${path}`, {
-          source: rtspUrl,
-          sourceOnDemand: true,
-        }),
+        this.httpService.post(`${this.apiUrl}/v3/config/paths/add/${path}`, pathConfig),
       );
-      this.logger.log(`MediaMTX path ditambahkan: ${path}`);
+      this.logger.log(`MediaMTX path ditambahkan (runOnDemand): ${path}`);
     } catch (error: any) {
       // Jika sudah ada, lakukan update
       if (error?.response?.status === 400) {
@@ -52,14 +57,19 @@ export class MediaMtxService {
    * Mengupdate konfigurasi path yang sudah ada di MediaMTX
    */
   async updatePath(path: string, rtspUrl: string): Promise<void> {
+    const pathConfig = {
+      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnDemandRestart: true,
+    };
+
     try {
       await firstValueFrom(
         this.httpService.patch(
           `${this.apiUrl}/v3/config/paths/patch/${path}`,
-          { source: rtspUrl },
+          pathConfig,
         ),
       );
-      this.logger.log(`MediaMTX path diupdate: ${path}`);
+      this.logger.log(`MediaMTX path diupdate (runOnDemand): ${path}`);
     } catch (error: any) {
       this.logger.error(
         `Gagal mengupdate path MediaMTX: ${path}`,

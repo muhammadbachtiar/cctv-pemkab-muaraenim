@@ -5,11 +5,13 @@
 # Mengaktifkan HTTP API untuk NestJS Backend (manajemen path dinamis)
 api: yes
 apiAddress: 0.0.0.0:9997
+logLevel: warn
 
-# Webhook Autentikasi ke NestJS Backend
+# Autentikasi via HTTP ke NestJS Backend
 # MediaMTX akan memanggil endpoint ini setiap kali ada request stream masuk
 # Backend akan memutuskan apakah akses diizinkan (200) atau ditolak (401)
-externalAuthenticationURL: http://backend:3001/api/v1/mediamtx/auth
+authMethod: http
+authHTTPAddress: http://backend:3001/api/v1/mediamtx/auth
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Konfigurasi Protokol
@@ -34,15 +36,3 @@ webrtc: no
 # Path baru akan ditambahkan secara dinamis oleh NestJS via REST API
 # ─────────────────────────────────────────────────────────────────────────────
 paths:
-  tugu-kopi:
-    source: rtsp://xxx:xxx@xxx:554/Streaming/Channels/101
-    sourceOnDemand: true
-  tugu-adipura:
-    source: rtsp://xxx:xxx@xxx:554/Streaming/Channels/101
-    sourceOnDemand: true
-  simpang-kepur-01:
-    source: rtsp://xxx:xxx@xxx:554/Streaming/Channels/101
-    sourceOnDemand: true
-  simpang-kepur-ptz:
-    source: rtsp://xxx:xxx@xxx:554/Streaming/Channels/101
-    sourceOnDemand: true
