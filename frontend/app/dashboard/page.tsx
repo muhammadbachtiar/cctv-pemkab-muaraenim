@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [currentSlot, setCurrentSlot] = useState<number>(0);
   const [fullscreenCCTV, setFullscreenCCTV] = useState<CCTVItem | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Sidebar controls
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -463,11 +464,23 @@ export default function DashboardPage() {
                 {isCamerasLoading && (
                   <span className="text-xs text-slate-400 animate-pulse">Menyinkronkan data...</span>
                 )}
+                <div className="ml-auto">
+                  <button
+                    onClick={() => setRefreshKey((k) => k + 1)}
+                    title="Refresh semua stream"
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 active:scale-95 transition-all shadow-sm cursor-pointer"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh Stream
+                  </button>
+                </div>
               </div>
               <div className={`grid ${gridClass} gap-4 w-full`}>
                 {selectedCCTVs.map((cctv, index) => (
                   <CCTVViewer
-                    key={`slot-${index}`}
+                    key={`slot-${index}-${refreshKey}`}
                     cctv={cctv}
                     onSelect={() => openSelector(index)}
                     onFullscreen={cctv ? () => handleOpenFullscreen(cctv) : undefined}

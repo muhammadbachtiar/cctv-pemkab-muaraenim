@@ -14,6 +14,7 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
   const [retrying, setRetrying] = useState(false);
   const [retryingState, setRetryingState] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isMounted = useRef(true);
   const selectedCctvRef = useRef<CCTVItem | null>(null);
   const retryCountRef = useRef(0);
@@ -22,6 +23,8 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
   const hlsRef = useRef<any>(null);
   const manifestRetryCountRef = useRef(0);
   const manifestTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const streamStartedRef = useRef(false);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const buildUrl = (url: string) => {
     if (url.endsWith("/")) return `${url}index.m3u8`;
@@ -65,6 +68,11 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
 
   const cleanup = () => {
     isMounted.current = false;
+    streamStartedRef.current = false;
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
     clearRetry();
     clearManifestRetry();
     stopVideo(videoRef.current);
@@ -247,6 +255,7 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
 
     const onPlaying = () => {
       if (!isMounted.current) return;
+      streamStartedRef.current = true;
       setHasError(false);
       setRetrying(false);
       setRetryingState(false);
@@ -265,8 +274,33 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
 
     loadStream();
 
+    // ── Observe visibility: start/restart stream when card enters viewport ──
+    if (containerRef.current) {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && isMounted.current) {
+              if (!streamStartedRef.current && !hlsRef.current) {
+                // Card became visible but stream hasn't started yet — try again
+                loadStream();
+              } else if (hlsRef.current && videoRef.current) {
+                // Video element may have regained dimensions, nudge playback
+                videoRef.current.play().catch(() => {});
+              }
+            }
+          });
+        },
+        { threshold: 0.1 } // Trigger when at least 10% of card is visible
+      );
+      observerRef.current.observe(containerRef.current);
+    }
+
     return () => {
       clearRetry();
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
       const video = videoRef.current;
       if (video && listenersAttached.current) {
         video.removeEventListener("error", onError);
@@ -306,7 +340,7 @@ export default function CCTVViewer({ cctv, onSelect, onFullscreen }: CCTVViewerP
   }
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col shadow-sm w-full aspect-video">
+    <div ref={containerRef} className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col shadow-sm w-full aspect-video">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-2 flex-1 min-w-0">
