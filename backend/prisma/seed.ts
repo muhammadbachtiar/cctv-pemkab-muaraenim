@@ -1,8 +1,30 @@
 import { PrismaClient } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import * as bcrypt from 'bcrypt';
 import 'dotenv/config';
 
-const prisma = new PrismaClient();
+const dbUrl = process.env.DATABASE_URL;
+if (!dbUrl) {
+  throw new Error('DATABASE_URL environment variable is not defined.');
+}
+
+const url = new URL(dbUrl);
+const host = url.hostname;
+const port = url.port ? parseInt(url.port) : 3306;
+const user = url.username;
+const password = decodeURIComponent(url.password);
+const database = url.pathname.substring(1);
+
+const adapter = new PrismaMariaDb({
+  host,
+  port,
+  user,
+  password,
+  database,
+  connectionLimit: 5,
+});
+
+const prisma = new PrismaClient({ adapter });
 
 const ALL_PERMISSIONS = [
   'camera:create',

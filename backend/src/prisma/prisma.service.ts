@@ -1,7 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
 @Injectable()
 export class PrismaService
@@ -10,14 +9,34 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const adapter = new PrismaPg(pool);
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL environment variable is not defined.');
+    }
+
+    // Parse connection string
+    const url = new URL(dbUrl);
+    const host = url.hostname;
+    const port = url.port ? parseInt(url.port) : 3306;
+    const user = url.username;
+    const password = decodeURIComponent(url.password);
+    const database = url.pathname.substring(1);
+
+    const adapter = new PrismaMariaDb({
+      host,
+      port,
+      user,
+      password,
+      database,
+      connectionLimit: 10,
+    });
+
     super({ adapter });
   }
 
   async onModuleInit() {
     await this.$connect();
-    this.logger.log('✅ Terhubung ke database melalui Prisma Client');
+    this.logger.log('✅ Terhubung ke MariaDB melalui Prisma Client');
   }
 
   async onModuleDestroy() {
@@ -25,5 +44,3 @@ export class PrismaService
     this.logger.log('Database connection closed');
   }
 }
-
-

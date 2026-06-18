@@ -12,7 +12,7 @@ RUN npm install
 # Copy seluruh source code
 COPY . .
 
-# Generate Prisma Client
+# Generate Prisma Client (MySQL/MariaDB built-in connector)
 RUN npx prisma generate
 
 # Build NestJS
@@ -39,5 +39,5 @@ COPY --from=builder /app/prisma.config.js ./prisma.config.js
 
 EXPOSE 3001
 
-# Jalankan migrasi + seed + start server
+# Jalankan migrasi lalu start server
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
