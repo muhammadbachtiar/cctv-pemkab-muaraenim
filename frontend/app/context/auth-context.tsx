@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { api } from "../utils/api";
+import { api, setOnUnauthorized } from "../utils/api";
 
 interface UserRole {
   id: string;
@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await api.post<{
         accessToken: string;
         user: UserProfile;
-      }>("/api/v1/auth/login", { username, password });
+      }>("/api/v1/auth/login", { username, password }, { skipAuthInterceptor: true });
 
       const displayName = response.user.fullName || response.user.username;
       const userPerms = parsePermissions(response.user.role.permissions);
@@ -157,6 +157,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("cctv_user", name);
     setUser(name);
   };
+
+  // Register unauthorized handler to automatically trigger React logout on 401 responses
+  useEffect(() => {
+    setOnUnauthorized(() => {
+      logout();
+    });
+  }, []);
 
   return (
     <AuthContext.Provider

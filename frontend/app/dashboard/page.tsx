@@ -38,6 +38,7 @@ export default function DashboardPage() {
   // Dynamic Camera List from DB
   const [cameras, setCameras] = useState<CCTVItem[]>([]);
   const [isCamerasLoading, setIsCamerasLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const lastLoadedCameraIdsRef = useRef<string>("");
 
@@ -69,16 +70,17 @@ export default function DashboardPage() {
   }, [currentLayoutOption?.cols]);
 
   // Fetch cameras from database and map stream URLs
-  const loadCameras = async () => {
+  const loadCameras = async (force = false) => {
     if (!isAuthenticated) return;
     setIsCamerasLoading(true);
+    setCameraError(null);
     try {
       const fetched = await api.get<any[]>("/api/v1/cameras");
       const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN;
       const token = localStorage.getItem("accessToken");
 
       const currentIds = fetched.map((c) => c.id).sort().join(",");
-      if (currentIds === lastLoadedCameraIdsRef.current) {
+      if (!force && currentIds === lastLoadedCameraIdsRef.current) {
         setIsCamerasLoading(false);
         return;
       }
@@ -93,30 +95,25 @@ export default function DashboardPage() {
       }));
 
       setCameras(mapped);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Gagal memuat daftar CCTV:", err);
+      setCameraError(err?.message || "Gagal memuat daftar kamera. Silakan coba lagi.");
     } finally {
       setIsCamerasLoading(false);
     }
   };
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!isAuthenticated || isCamerasLoading || cameras.length > 0) {
-      return;
-    }
-    loadCameras();
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated, isCamerasLoading, cameras.length]);
-
-  // Fetch cameras when authentication is ready
   useEffect(() => {
     if (isAuthenticated) {
-      loadCameras();
+      loadCameras(false);
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (isAuthenticated && refreshKey > 0) {
+      loadCameras(true);
+    }
+  }, [refreshKey]);
+
 
   // Auto-fill slots on layout change, camera fetch, or authentication
   useEffect(() => {
@@ -459,33 +456,118 @@ export default function DashboardPage() {
           {/* Tab 1: Live Monitoring Grid */}
           {activeTab === "monitoring" && (
             <div className="flex flex-col gap-4 h-full">
+              {/* Monitoring toolbar */}
               <div className="flex items-center justify-between shrink-0">
-                {isCamerasLoading && (
-                  <span className="text-xs text-slate-400 animate-pulse">Menyinkronkan data...</span>
-                )}
+                <div className="flex items-center gap-2">
+                  {isCamerasLoading && (
+                    <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                      <span className="w-3 h-3 border border-slate-300 border-t-blue-500 rounded-full animate-spin-slow inline-block"></span>
+                      Menyinkronkan data...
+                    </span>
+                  )}
+                  {cameraError && !isCamerasLoading && (
+                    <span className="flex items-center gap-1.5 text-xs text-red-500">
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="13" height="13">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {cameraError}
+                    </span>
+                  )}
+                </div>
                 <div className="ml-auto">
                   <button
                     onClick={() => setRefreshKey((k) => k + 1)}
                     title="Refresh semua stream"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 active:scale-95 transition-all shadow-sm cursor-pointer"
+                    disabled={isCamerasLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm cursor-pointer"
                   >
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14" className={isCamerasLoading ? "animate-spin" : ""}>
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     Refresh Stream
                   </button>
                 </div>
               </div>
-              <div className={`grid ${gridClass} gap-4 w-full`}>
-                {selectedCCTVs.map((cctv, index) => (
-                  <CCTVViewer
-                    key={`slot-${index}-${refreshKey}`}
-                    cctv={cctv}
-                    onSelect={() => openSelector(index)}
-                    onFullscreen={cctv ? () => handleOpenFullscreen(cctv) : undefined}
-                  />
-                ))}
-              </div>
+
+              {/* Loading skeleton */}
+              {isCamerasLoading && cameras.length === 0 && (
+                <div className={`grid ${gridClass} gap-4 w-full`}>
+                  {Array.from({ length: getSlotCount() }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="aspect-video bg-slate-200 rounded-xl animate-pulse flex items-center justify-center"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="32" height="32" className="text-slate-300">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Error state (fetch failed, no data) */}
+              {!isCamerasLoading && cameraError && cameras.length === 0 && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center py-16">
+                  <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="32" height="32" className="text-red-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Gagal Memuat Kamera</p>
+                    <p className="text-xs text-slate-400 max-w-xs">{cameraError}</p>
+                  </div>
+                  <button
+                    onClick={() => setRefreshKey((k) => k + 1)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Coba Lagi
+                  </button>
+                </div>
+              )}
+
+              {/* Empty state (loaded but no cameras) */}
+              {!isCamerasLoading && !cameraError && cameras.length === 0 && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center py-16">
+                  <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="32" height="32" className="text-slate-400">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700 mb-1">Belum Ada Kamera Terdaftar</p>
+                    <p className="text-xs text-slate-400 max-w-xs">Tambahkan kamera terlebih dahulu melalui menu Kelola Kamera untuk memulai monitoring.</p>
+                  </div>
+                  {(hasPermission("camera:create")) && (
+                    <button
+                      onClick={() => setActiveTab("cameras")}
+                      className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Tambah Kamera
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Camera grid — only when data loaded and no error */}
+              {!isCamerasLoading && !cameraError && cameras.length > 0 && (
+                <div className={`grid ${gridClass} gap-4 w-full`}>
+                  {selectedCCTVs.map((cctv, index) => (
+                    <CCTVViewer
+                      key={`slot-${index}-${refreshKey}`}
+                      cctv={cctv}
+                      onSelect={() => openSelector(index)}
+                      onFullscreen={cctv ? () => handleOpenFullscreen(cctv) : undefined}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -2,7 +2,15 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 interface RequestOptions extends RequestInit {
   bodyData?: any;
+  /** Jika true, respons 401 tidak akan memicu logout global (digunakan untuk endpoint login) */
+  skipAuthInterceptor?: boolean;
 }
+
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export const setOnUnauthorized = (callback: () => void) => {
+  onUnauthorizedCallback = callback;
+};
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
@@ -24,19 +32,29 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (response.status === 401) {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("cctv_user");
-      localStorage.removeItem("cctv_permissions");
-      localStorage.removeItem("cctv_role");
-      // Only redirect to login if not already on a public page
-      const publicPaths = ["/login", "/public", "/publik", "/"];
-      const isPublicPath = publicPaths.includes(window.location.pathname);
-      if (!isPublicPath) {
-        window.location.href = "/login";
+    // Jika endpoint ini tidak memerlukan interceptor auth (misal: login)
+    // biarkan error diproses normal agar pesan dari server diteruskan
+    if (!options.skipAuthInterceptor) {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("cctv_user");
+        localStorage.removeItem("cctv_permissions");
+        localStorage.removeItem("cctv_role");
+
+        if (onUnauthorizedCallback) {
+          onUnauthorizedCallback();
+        } else {
+          // Fallback if context callback is not registered yet
+          const publicPaths = ["/login", "/public", "/publik", "/"];
+          const isPublicPath = publicPaths.includes(window.location.pathname);
+          if (!isPublicPath) {
+            window.location.href = "/login";
+          }
+        }
       }
+      throw new Error("Sesi login berakhir. Silakan masuk kembali.");
     }
-    throw new Error("Sesi login berakhir. Silakan masuk kembali.");
+    // Jika skipAuthInterceptor, biarkan blok !response.ok di bawah menangani error-nya
   }
 
   if (!response.ok) {

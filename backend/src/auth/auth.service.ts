@@ -14,7 +14,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {}
+  ) { }
 
   async login(dto: LoginDto) {
     const user = await this.prisma.user.findUnique({
@@ -22,8 +22,12 @@ export class AuthService {
       include: { role: true },
     });
 
-    if (!user || !user.isActive) {
+    if (!user) {
       throw new UnauthorizedException('Username atau password salah');
+    }
+
+    if (!user.isActive) {
+      throw new UnauthorizedException('Akun dinonaktifkan. Silakan hubungi administrator.');
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
