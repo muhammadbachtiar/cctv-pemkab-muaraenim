@@ -20,6 +20,15 @@ interface UserProfile {
   role: RoleSummary;
 }
 
+interface CameraSummary {
+  id: string;
+  name: string;
+  path: string;
+  locationName?: string;
+  isPublic: boolean;
+  isActive: boolean;
+}
+
 export default function UserManagement() {
   const { hasPermission } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -31,6 +40,7 @@ export default function UserManagement() {
   // Modal states
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isPasswordOpen, setIsPasswordOpen] = useState(false);
+  const [isCameraAccessOpen, setIsCameraAccessOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   // Form states
@@ -48,6 +58,12 @@ export default function UserManagement() {
   const [newPassword, setNewPassword] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+
+  // Camera access states
+  const [userCameraAccessList, setUserCameraAccessList] = useState<string[]>([]);
+  const [allCameras, setAllCameras] = useState<CameraSummary[]>([]);
+  const [isCameraAccessLoading, setIsCameraAccessLoading] = useState(false);
+  const [cameraSearch, setCameraSearch] = useState("");
 
   // Load data
   const loadData = async () => {
@@ -174,6 +190,43 @@ export default function UserManagement() {
     }
   };
 
+  const handleOpenCameraAccess = async (user: UserProfile) => {
+    setSelectedUser(user);
+    setIsCameraAccessOpen(true);
+    setIsCameraAccessLoading(true);
+    setCameraSearch("");
+    try {
+      // Fetch all cameras
+      const cams = await api.get<CameraSummary[]>("/api/v1/cameras");
+      setAllCameras(cams);
+
+      // Fetch user's current camera access list
+      const accesses = await api.get<any[]>(`/api/v1/users/${user.id}/cameras`);
+      setUserCameraAccessList(accesses.map((a) => a.cameraId));
+    } catch (err: any) {
+      alert("Gagal memuat data akses kamera: " + err.message);
+    } finally {
+      setIsCameraAccessLoading(false);
+    }
+  };
+
+  const handleSaveCameraAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser) return;
+    setIsCameraAccessLoading(true);
+    try {
+      await api.post(`/api/v1/users/${selectedUser.id}/cameras`, {
+        cameraIds: userCameraAccessList,
+      });
+      setIsCameraAccessOpen(false);
+      alert(`Akses kamera untuk user "${selectedUser.username}" berhasil diperbarui.`);
+    } catch (err: any) {
+      alert("Gagal memperbarui akses kamera: " + err.message);
+    } finally {
+      setIsCameraAccessLoading(false);
+    }
+  };
+
   const filteredUsers = users.filter(
     (u) =>
       u.username.toLowerCase().includes(search.toLowerCase()) ||
@@ -290,6 +343,17 @@ export default function UserManagement() {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {hasPermission("camera:manage-access") && user.role.name !== "admin" && (
+                            <button
+                              onClick={() => handleOpenCameraAccess(user)}
+                              className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                              title="Kelola Akses Kamera"
+                            >
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          )}
                           {hasPermission("user:update") && (
                             <button
                               onClick={() => handleOpenPassword(user)}
@@ -498,6 +562,164 @@ export default function UserManagement() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* User Camera Access Modal */}
+      {isCameraAccessOpen && selectedUser && (
+        <div className="fixed inset-0 bg-black/45 z-[70] flex items-center justify-center p-4 overflow-y-auto" onClick={() => setIsCameraAccessOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl border border-slate-200 overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-6 py-5 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-800">Kelola Akses Kamera</h3>
+                <p className="text-xs text-slate-500 mt-0.5">User: <strong className="text-slate-700">@{selectedUser.username}</strong> ({selectedUser.fullName || "Tanpa Nama"})</p>
+              </div>
+              <button onClick={() => setIsCameraAccessOpen(false)} className="p-1 hover:bg-slate-200 rounded-lg text-slate-500 cursor-pointer">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="20" height="20">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 flex flex-col gap-4">
+              {/* Search bar */}
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  placeholder="Cari kamera berdasarkan nama atau lokasi..."
+                  value={cameraSearch}
+                  onChange={(e) => setCameraSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                />
+              </div>
+
+              {/* Selection helper buttons */}
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">
+                  Terpilih: {userCameraAccessList.length} dari {allCameras.filter(c => !c.isPublic).length} Kamera Privat
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const privateIds = allCameras.filter(c => !c.isPublic).map(c => c.id);
+                      setUserCameraAccessList(privateIds);
+                    }}
+                    className="text-blue-600 hover:text-blue-700 font-semibold cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setUserCameraAccessList([])}
+                    className="text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+                  >
+                    Hapus Pilihan
+                  </button>
+                </div>
+              </div>
+
+              {/* Camera List with Scroll */}
+              {isCameraAccessLoading ? (
+                <div className="flex justify-center p-8">
+                  <div className="w-8 h-8 border-2 border-slate-200 border-t-purple-600 rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <div className="max-h-[300px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                  {allCameras.filter(cam => 
+                    cam.name.toLowerCase().includes(cameraSearch.toLowerCase()) ||
+                    (cam.locationName && cam.locationName.toLowerCase().includes(cameraSearch.toLowerCase()))
+                  ).length === 0 ? (
+                    <div className="text-sm text-slate-400 py-8 text-center bg-white rounded-xl">
+                      Tidak ada kamera ditemukan.
+                    </div>
+                  ) : (
+                    allCameras
+                      .filter(cam => 
+                        cam.name.toLowerCase().includes(cameraSearch.toLowerCase()) ||
+                        (cam.locationName && cam.locationName.toLowerCase().includes(cameraSearch.toLowerCase()))
+                      )
+                      .map((cam) => {
+                        const isChecked = userCameraAccessList.includes(cam.id);
+                        return (
+                          <label
+                            key={cam.id}
+                            className={`flex items-start gap-3 px-4 py-3 bg-white hover:bg-slate-50 transition-colors cursor-pointer select-none ${
+                              cam.isPublic ? "opacity-60 cursor-not-allowed" : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={cam.isPublic || isChecked}
+                              disabled={cam.isPublic}
+                              onChange={(e) => {
+                                if (cam.isPublic) return;
+                                if (e.target.checked) {
+                                  setUserCameraAccessList([...userCameraAccessList, cam.id]);
+                                } else {
+                                  setUserCameraAccessList(userCameraAccessList.filter(id => id !== cam.id));
+                                }
+                              }}
+                              className="mt-0.5 w-4.5 h-4.5 accent-purple-600 shrink-0"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800 text-sm flex items-center gap-1.5">
+                                {cam.name}
+                                {cam.isPublic && (
+                                  <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 text-[9px] font-semibold">
+                                    Publik
+                                  </span>
+                                )}
+                                {!cam.isActive && (
+                                  <span className="inline-flex items-center px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 text-[9px] font-semibold">
+                                    Nonaktif
+                                  </span>
+                                )}
+                              </span>
+                              <span className="text-xs text-slate-400 font-mono">/{cam.path}</span>
+                              {cam.locationName && (
+                                <span className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="12" height="12" className="text-slate-400">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  {cam.locationName}
+                                </span>
+                              )}
+                            </div>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              )}
+
+              {/* Modal actions */}
+              <div className="flex items-center justify-end gap-3 mt-4 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsCameraAccessOpen(false)}
+                  className="px-5 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium text-sm transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveCameraAccess}
+                  disabled={isCameraAccessLoading}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {isCameraAccessLoading ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

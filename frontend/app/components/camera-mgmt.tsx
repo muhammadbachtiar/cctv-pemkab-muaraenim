@@ -51,8 +51,9 @@ export default function CameraManagement() {
 
   // Access modal states
   const [accessList, setAccessList] = useState<CameraAccess[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState("");
   const [isAccessLoading, setIsAccessLoading] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [userSearch, setUserSearch] = useState("");
 
   // Load cameras & users
   const loadData = async () => {
@@ -171,10 +172,14 @@ export default function CameraManagement() {
     setSelectedCamera(camera);
     setIsAccessOpen(true);
     setIsAccessLoading(true);
-    setSelectedUserId("");
+    setUserSearch("");
     try {
+      const usrs = await api.get<UserSummary[]>("/api/v1/users");
+      setUsers(usrs);
+
       const access = await api.get<CameraAccess[]>(`/api/v1/cameras/${camera.id}/access`);
       setAccessList(access);
+      setSelectedUserIds(access.map((a) => a.userId));
     } catch (err: any) {
       alert("Gagal memuat hak akses kamera: " + err.message);
     } finally {
@@ -182,37 +187,18 @@ export default function CameraManagement() {
     }
   };
 
-  const handleGrantAccess = async (e: React.FormEvent) => {
+  const handleSaveAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCamera || !selectedUserId) return;
-    setIsAccessLoading(true);
-    try {
-      await api.post(`/api/v1/cameras/${selectedCamera.id}/access`, {
-        userId: selectedUserId,
-        canView: true,
-      });
-      // reload access list
-      const access = await api.get<CameraAccess[]>(`/api/v1/cameras/${selectedCamera.id}/access`);
-      setAccessList(access);
-      setSelectedUserId("");
-    } catch (err: any) {
-      alert("Gagal memberikan hak akses: " + err.message);
-    } finally {
-      setIsAccessLoading(false);
-    }
-  };
-
-  const handleRevokeAccess = async (userId: string) => {
     if (!selectedCamera) return;
-    if (!confirm("Cabut hak akses menonton untuk user ini?")) return;
     setIsAccessLoading(true);
     try {
-      await api.delete(`/api/v1/cameras/${selectedCamera.id}/access/${userId}`);
-      // reload access list
-      const access = await api.get<CameraAccess[]>(`/api/v1/cameras/${selectedCamera.id}/access`);
-      setAccessList(access);
+      await api.post(`/api/v1/cameras/${selectedCamera.id}/access/sync`, {
+        userIds: selectedUserIds,
+      });
+      setIsAccessOpen(false);
+      alert(`Izin akses untuk kamera "${selectedCamera.name}" berhasil diperbarui.`);
     } catch (err: any) {
-      alert("Gagal mencabut hak akses: " + err.message);
+      alert("Gagal memperbarui hak akses: " + err.message);
     } finally {
       setIsAccessLoading(false);
     }
@@ -551,73 +537,119 @@ export default function CameraManagement() {
               </button>
             </div>
 
-            <div className="p-6 flex flex-col gap-5">
-              {/* Form to Grant Access */}
-              <form onSubmit={handleGrantAccess} className="flex gap-2 items-end">
-                <div className="flex-1 flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-600">Pilih User untuk Diberikan Izin</label>
-                  <select
-                    required
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-600 transition-colors"
-                  >
-                    <option value="">-- Pilih User --</option>
-                    {users
-                      // Filter user yang sudah ada izin di daftar saat ini
-                      .filter((u) => !accessList.some((a) => a.userId === u.id))
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.fullName ? `${u.fullName} (${u.username})` : u.username}
-                        </option>
-                      ))}
-                  </select>
-                </div>
-                <button
-                  type="submit"
-                  disabled={isAccessLoading || !selectedUserId}
-                  className="px-4 py-2.2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer disabled:opacity-60 shrink-0"
-                >
-                  Beri Akses
-                </button>
-              </form>
+            <div className="p-6 flex flex-col gap-4">
+              {/* Search bar */}
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </span>
+                <input
+                  type="text"
+                  placeholder="Cari user berdasarkan nama atau username..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-4 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 transition-colors"
+                />
+              </div>
 
-              {/* List of Users with Access */}
-              <div className="flex flex-col gap-2">
-                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">User yang Memiliki Akses</h4>
-                
-                {isAccessLoading ? (
-                  <div className="flex justify-center p-6">
-                    <div className="w-6 h-6 border-2 border-slate-200 border-t-purple-600 rounded-full animate-spin"></div>
-                  </div>
-                ) : accessList.length === 0 ? (
-                  <div className="text-sm text-slate-400 py-6 text-center border border-dashed border-slate-200 rounded-xl">
-                    Belum ada user yang diberikan akses khusus. Kamera ini hanya dapat dilihat oleh Admin dan Operator.
-                  </div>
-                ) : (
-                  <div className="max-h-[220px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
-                    {accessList.map((access) => (
-                      <div key={access.id} className="flex items-center justify-between px-4 py-2.5 bg-white hover:bg-slate-50 transition-colors">
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-slate-800 text-sm">
-                            {access.user.fullName || access.user.username}
-                          </span>
-                          <span className="text-xs text-slate-400">@{access.user.username}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRevokeAccess(access.userId)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                          title="Cabut Izin Akses"
-                        >
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {/* Selection helpers */}
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-slate-500 font-medium">
+                  Terpilih: {selectedUserIds.length} User
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allUserIds = users.map(u => u.id);
+                      setSelectedUserIds(allUserIds);
+                    }}
+                    className="text-blue-600 hover:text-blue-700 font-semibold cursor-pointer"
+                  >
+                    Pilih Semua
+                  </button>
+                  <span className="text-slate-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUserIds([])}
+                    className="text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+                  >
+                    Hapus Pilihan
+                  </button>
+                </div>
+              </div>
+
+              {/* User checkbox list */}
+              {isAccessLoading ? (
+                <div className="flex justify-center p-8">
+                  <div className="w-8 h-8 border-2 border-slate-200 border-t-purple-600 rounded-full animate-spin"></div>
+                </div>
+              ) : (
+                <div className="max-h-[250px] overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 bg-slate-50/50">
+                  {users.filter(u => 
+                    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+                    (u.fullName && u.fullName.toLowerCase().includes(userSearch.toLowerCase()))
+                  ).length === 0 ? (
+                    <div className="text-sm text-slate-400 py-8 text-center bg-white rounded-xl">
+                      Tidak ada user ditemukan.
+                    </div>
+                  ) : (
+                    users
+                      .filter(u => 
+                        u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+                        (u.fullName && u.fullName.toLowerCase().includes(userSearch.toLowerCase()))
+                      )
+                      .map((u) => {
+                        const isChecked = selectedUserIds.includes(u.id);
+                        return (
+                          <label
+                            key={u.id}
+                            className="flex items-start gap-3 px-4 py-3 bg-white hover:bg-slate-50 transition-colors cursor-pointer select-none"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedUserIds([...selectedUserIds, u.id]);
+                                } else {
+                                  setSelectedUserIds(selectedUserIds.filter(id => id !== u.id));
+                                }
+                              }}
+                              className="mt-0.5 w-4.5 h-4.5 accent-purple-600 shrink-0"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-slate-800 text-sm">
+                                {u.fullName || u.username}
+                              </span>
+                              <span className="text-xs text-slate-400">@{u.username}</span>
+                            </div>
+                          </label>
+                        );
+                      })
+                  )}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 mt-4 border-t border-slate-200 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsAccessOpen(false)}
+                  className="px-5 py-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium text-sm transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAccess}
+                  disabled={isAccessLoading}
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {isAccessLoading ? "Menyimpan..." : "Simpan Perubahan"}
+                </button>
               </div>
             </div>
           </div>

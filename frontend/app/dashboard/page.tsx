@@ -18,11 +18,7 @@ import Profile from "../components/profile";
 
 export default function DashboardPage() {
   const { user, role, hasPermission, logout, isLoading, isAuthenticated } = useAuth();
-
-  // Tab control
   const [activeTab, setActiveTab] = useState<"monitoring" | "map" | "cameras" | "users" | "roles" | "profile">("monitoring");
-
-  // Grid/Layout states
   const [layout, setLayout] = useState<LayoutType>("3x3");
   const [selectedCCTVs, setSelectedCCTVs] = useState<(CCTVItem | null)[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -30,18 +26,12 @@ export default function DashboardPage() {
   const [fullscreenCCTV, setFullscreenCCTV] = useState<CCTVItem | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-
-  // Sidebar controls
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [gridRows, setGridRows] = useState<string>("auto");
-
-  // Dynamic Camera List from DB
   const [cameras, setCameras] = useState<CCTVItem[]>([]);
   const [isCamerasLoading, setIsCamerasLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-
   const lastLoadedCameraIdsRef = useRef<string>("");
-
   const currentLayoutOption = layoutOptions.find((o) => o.value === layout);
 
   const getSlotCount = () => {
@@ -69,7 +59,6 @@ export default function DashboardPage() {
     }
   }, [currentLayoutOption?.cols]);
 
-  // Fetch cameras from database and map stream URLs
   const loadCameras = async (force = false) => {
     if (!isAuthenticated) return;
     setIsCamerasLoading(true);
@@ -114,8 +103,6 @@ export default function DashboardPage() {
     }
   }, [refreshKey]);
 
-
-  // Auto-fill slots on layout change, camera fetch, or authentication
   useEffect(() => {
     if (!isAuthenticated || cameras.length === 0) return;
     const activeCameras = cameras.filter((c) => c.isActive);
@@ -124,7 +111,6 @@ export default function DashboardPage() {
     const slotCount = getSlotCount();
     setSelectedCCTVs((prev) => {
       const newSlots = [...prev];
-      // Keep existing slots that are still available and active
       const cleanedSlots = newSlots.map((slot) =>
         slot && activeCameras.some((c) => c.id === slot.id) ? activeCameras.find((c) => c.id === slot.id) || slot : null
       );
@@ -176,7 +162,6 @@ export default function DashboardPage() {
     setSelectorOpen(true);
   };
 
-  // Helper to force a camera directly into slot 0 and focus monitoring
   const handleSelectCameraFromMap = (cctv: CCTVItem) => {
     setCurrentSlot(0);
     handleSelectCCTV(cctv);
@@ -311,7 +296,7 @@ export default function DashboardPage() {
 
         {/* Navigation Sidebar */}
         <aside
-          className={`bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 z-10 transition-all duration-300 
+          className={`bg-white border-r border-slate-200 flex flex-col justify-between shrink-0 z-50 md:z-10 transition-all duration-300 
             ${isSidebarOpen
               ? "w-64 p-4 translate-x-0"
               : "w-0 p-0 border-r-0 -translate-x-full md:translate-x-0 overflow-hidden"
