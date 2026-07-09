@@ -6,7 +6,7 @@ services:
     container_name: cctv_backend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3001:3001"
+      - "3001:3001"
     depends_on:
       mediamtx:
         condition: service_healthy
@@ -26,8 +26,9 @@ services:
     container_name: cctv_mediamtx
     restart: unless-stopped
     ports:
-      - "8554:8554"  
-      - "127.0.0.1:8888:8888" 
+      - "8554:8554"   # RTSP
+      - "8888:8888"   # HLS (digunakan di frontend)
+      - "9997:9997"   # HTTP API (internal, bisa dihilangkan di production)
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml
     networks:
@@ -49,7 +50,7 @@ services:
     container_name: cctv_frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     depends_on:
       backend:
         condition: service_healthy

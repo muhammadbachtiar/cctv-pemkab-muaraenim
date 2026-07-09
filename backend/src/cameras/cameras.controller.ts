@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { CamerasService } from './cameras.service';
-import { CreateCameraDto, UpdateCameraDto, GrantAccessDto } from './dto/camera.dto';
+import { CreateCameraDto, UpdateCameraDto, GrantAccessDto, SyncCameraUsersDto } from './dto/camera.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -91,5 +91,14 @@ export class CamerasController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ) {
     return this.camerasService.revokeAccess(id, userId);
+  }
+
+  @Post(':id/access/sync')
+  @RequirePermissions('camera:manage-access')
+  syncCameraUsers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SyncCameraUsersDto,
+  ) {
+    return this.camerasService.syncCameraUsers(id, dto);
   }
 }

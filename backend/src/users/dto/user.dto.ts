@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsBoolean,
   MinLength,
+  IsArray,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -23,4 +24,10 @@ export class UpdateUserPasswordDto {
   @IsString()
   @MinLength(6)
   newPassword: string;
+}
+
+export class SyncUserCamerasDto {
+  @IsArray()
+  @IsString({ each: true })
+  cameraIds: string[];
 }

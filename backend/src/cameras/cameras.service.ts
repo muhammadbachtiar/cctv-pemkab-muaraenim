@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MediaMtxService } from '../mediamtx/mediamtx.service';
-import { CreateCameraDto, UpdateCameraDto, GrantAccessDto } from './dto/camera.dto';
+import { CreateCameraDto, UpdateCameraDto, GrantAccessDto, SyncCameraUsersDto } from './dto/camera.dto';
 
 @Injectable()
 export class CamerasService implements OnApplicationBootstrap {
@@ -320,6 +320,56 @@ export class CamerasService implements OnApplicationBootstrap {
           include: { role: true },
         },
       },
+    });
+  }
+
+  async syncCameraUsers(cameraId: string, dto: SyncCameraUsersDto) {
+    const camera = await this.prisma.camera.findUnique({ where: { id: cameraId } });
+    if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
+
+    // Verify all userIds exist
+    if (dto.userIds.length > 0) {
+      const usersCount = await this.prisma.user.count({
+        where: { id: { in: dto.userIds } }
+      });
+      if (usersCount !== dto.userIds.length) {
+        throw new NotFoundException('Satu atau lebih user tidak ditemukan');
+      }
+    }
+
+    // Wrap in transaction
+    return this.prisma.$transaction(async (tx) => {
+      // Delete accesses that are not in the list
+      await tx.userCameraAccess.deleteMany({
+        where: {
+          cameraId,
+          userId: { notIn: dto.userIds },
+        },
+      });
+
+      // Get remaining accesses
+      const existing = await tx.userCameraAccess.findMany({
+        where: { cameraId },
+        select: { userId: true },
+      });
+      const existingIds = existing.map((e) => e.userId);
+
+      // Create new accesses
+      const toAdd = dto.userIds.filter((id) => !existingIds.includes(id));
+      if (toAdd.length > 0) {
+        await tx.userCameraAccess.createMany({
+          data: toAdd.map((userId) => ({
+            userId,
+            cameraId,
+            canView: true,
+          })),
+        });
+      }
+
+      return tx.userCameraAccess.findMany({
+        where: { cameraId },
+        include: { user: { include: { role: true } } },
+      });
     });
   }
 }

@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Put,
   Delete,
   Body,
@@ -10,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { UpdateUserDto, UpdateUserPasswordDto } from './dto/user.dto';
+import { UpdateUserDto, UpdateUserPasswordDto, SyncUserCamerasDto } from './dto/user.dto';
 import { RequirePermissions } from '../common/decorators/permissions.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -63,5 +64,14 @@ export class UsersController {
   @RequirePermissions('user:read')
   getUserCameraAccess(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.getUserCameraAccess(id);
+  }
+
+  @Post(':id/cameras')
+  @RequirePermissions('camera:manage-access')
+  syncUserCameras(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SyncUserCamerasDto,
+  ) {
+    return this.usersService.syncUserCameras(id, dto);
   }
 }

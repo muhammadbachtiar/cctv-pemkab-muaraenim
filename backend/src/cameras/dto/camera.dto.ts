@@ -7,6 +7,7 @@ import {
   Min,
   Max,
   Matches,
+  IsArray,
 } from 'class-validator';
 
 export class CreateCameraDto {
@@ -89,4 +90,10 @@ export class GrantAccessDto {
   @IsOptional()
   @IsBoolean()
   canView?: boolean;
+}
+
+export class SyncCameraUsersDto {
+  @IsArray()
+  @IsString({ each: true })
+  userIds: string[];
 }

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpdateUserDto, UpdateUserPasswordDto } from './dto/user.dto';
+import { UpdateUserDto, UpdateUserPasswordDto, SyncUserCamerasDto } from './dto/user.dto';
 
 @Injectable()
 export class UsersService {
@@ -78,6 +78,55 @@ export class UsersService {
     return this.prisma.userCameraAccess.findMany({
       where: { userId },
       include: { camera: true },
+    });
+  }
+
+  async syncUserCameras(userId: string, dto: SyncUserCamerasDto) {
+    await this.findOne(userId);
+
+    // Verify all cameraIds exist
+    if (dto.cameraIds.length > 0) {
+      const camerasCount = await this.prisma.camera.count({
+        where: { id: { in: dto.cameraIds } }
+      });
+      if (camerasCount !== dto.cameraIds.length) {
+        throw new NotFoundException('Satu atau lebih kamera tidak ditemukan');
+      }
+    }
+
+    // Wrap in transaction for safety
+    return this.prisma.$transaction(async (tx) => {
+      // Delete accesses that are not in the list
+      await tx.userCameraAccess.deleteMany({
+        where: {
+          userId,
+          cameraId: { notIn: dto.cameraIds },
+        },
+      });
+
+      // Get remaining/existing accesses
+      const existing = await tx.userCameraAccess.findMany({
+        where: { userId },
+        select: { cameraId: true },
+      });
+      const existingIds = existing.map((e) => e.cameraId);
+
+      // Create new accesses
+      const toAdd = dto.cameraIds.filter((id) => !existingIds.includes(id));
+      if (toAdd.length > 0) {
+        await tx.userCameraAccess.createMany({
+          data: toAdd.map((cameraId) => ({
+            userId,
+            cameraId,
+            canView: true,
+          })),
+        });
+      }
+
+      return tx.userCameraAccess.findMany({
+        where: { userId },
+        include: { camera: true },
+      });
     });
   }
 }
