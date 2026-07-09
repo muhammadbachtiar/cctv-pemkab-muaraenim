@@ -24,7 +24,7 @@ rtspAddress: :8554
 # HLS Server (digunakan oleh frontend)
 hls: yes
 hlsAddress: :8888
-hlsAlwaysRemux: yes
+hlsAlwaysRemux: no
 hlsSegmentDuration: 2s
 hlsPartDuration: 500ms
 
