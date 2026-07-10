@@ -22,17 +22,10 @@ export class MediaMtxService {
     this.apiUrl = process.env.MEDIAMTX_API_URL || 'http://localhost:9997';
   }
 
-  /**
-   * Menambahkan atau mengupdate path kamera di MediaMTX
-   */
   async upsertPath(path: string, rtspUrl: string): Promise<void> {
-    // Gunakan runOnDemand + FFmpeg untuk mengatasi FU-A packetization error
-    // dari firmware kamera yang tidak kompatibel dengan mode pull langsung.
-    // FFmpeg me-remux via TCP dan memperbaiki stream sebelum diteruskan ke MediaMTX.
     const pathConfig = {
-      // Transcode H.265 (HEVC) ke H.264 secara real-time agar kompatibel dengan pemutar web browser
-      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
-      runOnDemandRestart: true,
+      runOnInit: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnInitRestart: true,
     };
 
     try {
@@ -59,9 +52,9 @@ export class MediaMtxService {
    */
   async updatePath(path: string, rtspUrl: string): Promise<void> {
     const pathConfig = {
-      // Transcode H.265 (HEVC) ke H.264 secara real-time agar kompatibel dengan pemutar web browser
-      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
-      runOnDemandRestart: true,
+      // Transcode H.265 (HEVC) ke H.264 secara real-time agar kompatibel dengan pemutar web browser (runOnInit agar stream standby konstan)
+      runOnInit: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnInitRestart: true,
     };
 
     try {

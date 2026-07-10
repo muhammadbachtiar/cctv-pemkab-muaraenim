@@ -80,7 +80,7 @@ export default function DashboardPage() {
         location: cam.locationName,
         url: cam.isPublic
           ? `${domain}/${cam.path}/`
-          : `${domain}/${cam.path}/index.m3u8?cookieCheck=1&token=${token}`,
+          : `${domain}/${cam.path}/?cookieCheck=1&token=${token}`,
       }));
 
       setCameras(mapped);
