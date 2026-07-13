@@ -24,8 +24,8 @@ export class MediaMtxService {
 
   async upsertPath(path: string, rtspUrl: string): Promise<void> {
     const pathConfig = {
-      runOnInit: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
-      runOnInitRestart: true,
+      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnDemandRestart: true,
     };
 
     try {
@@ -52,9 +52,9 @@ export class MediaMtxService {
    */
   async updatePath(path: string, rtspUrl: string): Promise<void> {
     const pathConfig = {
-      // Transcode H.265 (HEVC) ke H.264 secara real-time agar kompatibel dengan pemutar web browser (runOnInit agar stream standby konstan)
-      runOnInit: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
-      runOnInitRestart: true,
+      // Transcode H.265 (HEVC) ke H.264 secara real-time agar kompatibel dengan pemutar web browser (runOnDemand agar stream ditarik saat ditonton saja)
+      runOnDemand: `ffmpeg -rtsp_transport tcp -i ${rtspUrl} -c:v copy -an -f rtsp rtsp://127.0.0.1:8554/${path}`,
+      runOnDemandRestart: true,
     };
 
     try {
