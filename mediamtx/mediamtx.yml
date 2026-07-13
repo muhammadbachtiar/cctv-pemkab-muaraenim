@@ -11,7 +11,7 @@ logLevel: warn
 # MediaMTX akan memanggil endpoint ini setiap kali ada request stream masuk
 # Backend akan memutuskan apakah akses diizinkan (200) atau ditolak (401)
 authMethod: http
-authHTTPAddress: http://backend:3001/api/v1/mediamtx/auth
+authHTTPAddress: http://127.0.0.1:3001/api/v1/mediamtx/auth
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Konfigurasi Protokol
