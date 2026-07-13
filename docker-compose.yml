@@ -5,17 +5,14 @@ services:
       dockerfile: Dockerfile
     container_name: cctv_backend
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3001:3001"
+    network_mode: "host"
     depends_on:
       mediamtx:
         condition: service_healthy
     env_file:
       - ./backend/.env
-    networks:
-      - cctv_network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://0.0.0.0:3001/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -25,13 +22,9 @@ services:
     image: bluenviron/mediamtx:latest-ffmpeg
     container_name: cctv_mediamtx
     restart: unless-stopped
-    ports:
-      - "8554:8554"  
-      - "127.0.0.1:8888:8888" 
+    network_mode: "host"
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml
-    networks:
-      - cctv_network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9997/v3/paths/list"]
       interval: 5s
@@ -48,22 +41,15 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
     container_name: cctv_frontend
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
+    network_mode: "host"
     depends_on:
       backend:
         condition: service_healthy
     env_file:
       - ./frontend/.env
-    networks:
-      - cctv_network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://0.0.0.0:3000"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-
-networks:
-  cctv_network:
-    driver: bridge

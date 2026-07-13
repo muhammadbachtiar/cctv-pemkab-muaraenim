@@ -44,7 +44,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  await app.listen(port, '127.0.0.1');
   console.log(`🚀 Backend CCTV berjalan di: http://localhost:${port}`);
   console.log(`📝 Dokumentasi Swagger API: http://localhost:${port}/api/docs`);
 }
