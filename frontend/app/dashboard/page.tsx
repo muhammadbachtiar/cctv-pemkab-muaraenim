@@ -65,7 +65,7 @@ export default function DashboardPage() {
     setCameraError(null);
     try {
       const fetched = await api.get<any[]>("/api/v1/cameras");
-      const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN;
+      const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN || "/live";
       const token = localStorage.getItem("accessToken");
 
       const currentIds = fetched.map((c) => c.id).sort().join(",");

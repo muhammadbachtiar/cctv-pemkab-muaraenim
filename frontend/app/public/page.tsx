@@ -28,7 +28,7 @@ export default function PublicCCTVPage() {
     setIsLoading(true);
     try {
       const fetched = await api.get<any[]>("/api/v1/cameras/public");
-      const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN;
+      const domain = process.env.NEXT_PUBLIC_CCTV_DOMAIN || "/live";
 
       const mapped: CCTVItem[] = fetched.map((cam) => ({
         ...cam,

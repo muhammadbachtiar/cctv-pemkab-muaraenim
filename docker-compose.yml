@@ -37,8 +37,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_CCTV_DOMAIN: ${NEXT_PUBLIC_CCTV_DOMAIN}
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+        NEXT_PUBLIC_CCTV_DOMAIN: ${NEXT_PUBLIC_CCTV_DOMAIN:-/live}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
     container_name: cctv_frontend
     restart: unless-stopped
     network_mode: "host"
