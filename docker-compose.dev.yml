@@ -12,6 +12,8 @@ services:
         condition: service_healthy
     env_file:
       - ./backend/.env
+    environment:
+      - MEDIAMTX_API_URL=http://mediamtx:9997
     networks:
       - cctv_network
     healthcheck:
@@ -33,6 +35,8 @@ services:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml
     networks:
       - cctv_network
+    environment:
+      - MTX_AUTHHTTPADDRESS=http://backend:3001/api/v1/mediamtx/auth
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9997/v3/paths/list"]
       interval: 5s

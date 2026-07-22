@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { CCTVItem } from "../config/cctv-data";
 
 interface CCTVFullscreenModalProps {
@@ -18,69 +18,6 @@ export default function CCTVFullscreenModal({
 }: CCTVFullscreenModalProps) {
   const [showControls, setShowControls] = useState(true);
   const [hideTimeout, setHideTimeout] = useState<NodeJS.Timeout | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hlsRef = useRef<any>(null);
-
-  // HLS.js Player initialization
-  useEffect(() => {
-    if (!isOpen || !cctv || !cctv.url) return;
-
-    let hls: any = null;
-
-    const initPlayer = async () => {
-      const video = videoRef.current;
-      if (!video) return;
-
-      let hlsUrl = cctv.url;
-      if (hlsUrl.endsWith("/")) hlsUrl += "index.m3u8";
-      if (!hlsUrl.includes(".m3u8")) hlsUrl += "/index.m3u8";
-
-      if (video.canPlayType("application/vnd.apple.mpegurl")) {
-        video.src = hlsUrl;
-        video.play().catch(() => {});
-        return;
-      }
-
-      try {
-        const Hls = (await import("hls.js")).default;
-        if (!Hls.isSupported()) {
-          video.src = hlsUrl;
-          video.play().catch(() => {});
-          return;
-        }
-
-        hls = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 10,
-          maxMaxBufferLength: 30,
-          startLevel: -1,
-        });
-
-        hls.loadSource(hlsUrl);
-        hls.attachMedia(video);
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          video.play().catch(() => {});
-        });
-
-        hlsRef.current = hls;
-      } catch {
-        video.src = hlsUrl;
-        video.play().catch(() => {});
-      }
-    };
-
-    // Small delay to ensure DOM is ready
-    const timer = setTimeout(initPlayer, 100);
-
-    return () => {
-      clearTimeout(timer);
-      if (hlsRef.current) {
-        hlsRef.current.destroy();
-        hlsRef.current = null;
-      }
-    };
-  }, [isOpen, cctv?.url]);
 
   // Handle ESC key to close fullscreen and manage body scroll
   useEffect(() => {
@@ -111,7 +48,7 @@ export default function CCTVFullscreenModal({
 
     const timeout = setTimeout(() => {
       setShowControls(false);
-    }, 2000);
+    }, 2500);
 
     setHideTimeout(timeout);
   };
@@ -131,13 +68,12 @@ export default function CCTVFullscreenModal({
       className="fixed inset-0 z-50 bg-black flex items-center justify-center"
       onMouseMove={handleMouseMove}
     >
-      {/* Video player - fills entire screen */}
-      <video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-contain bg-black"
-        autoPlay
-        muted
-        playsInline
+      {/* Video player using MediaMTX built-in Player iframe */}
+      <iframe
+        src={cctv.url}
+        className="absolute inset-0 w-full h-full border-none bg-black"
+        scrolling="no"
+        allow="autoplay; fullscreen"
       />
 
       {/* Floating controls - only visible on hover */}

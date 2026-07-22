@@ -9,7 +9,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy seluruh source code
+# Copy seluruh source code (cache bust to apply main.ts binding changes)
+# cache_bust_v2
 COPY . .
 
 # Generate Prisma Client (MySQL/MariaDB built-in connector)
