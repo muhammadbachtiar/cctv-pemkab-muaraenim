@@ -5,7 +5,7 @@
 # Mengaktifkan HTTP API untuk NestJS Backend (manajemen path dinamis)
 api: yes
 apiAddress: 0.0.0.0:9997
-logLevel: warn
+logLevel: info
 
 # Autentikasi via HTTP ke NestJS Backend
 # MediaMTX akan memanggil endpoint ini setiap kali ada request stream masuk
