@@ -58,9 +58,9 @@ export class MediaMtxController {
       `Auth request: path=${path}, action=${action}, query=${query}`,
     );
 
-    // 1. Cari kamera berdasarkan path
-    const camera = await this.prisma.camera.findUnique({
-      where: { path },
+    // 1. Cari kamera berdasarkan path (pastikan belum di-soft-delete)
+    const camera = await this.prisma.camera.findFirst({
+      where: { path, deletedAt: null },
     });
 
     if (!camera || !camera.isActive) {
@@ -90,9 +90,9 @@ export class MediaMtxController {
       throw new UnauthorizedException('Token JWT tidak valid atau sudah kedaluwarsa');
     }
 
-    // 4. Cari user beserta role-nya
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
+    // 4. Cari user beserta role-nya (pastikan belum di-soft-delete)
+    const user = await this.prisma.user.findFirst({
+      where: { id: payload.sub, deletedAt: null },
       include: { role: true },
     });
 
@@ -116,7 +116,7 @@ export class MediaMtxController {
       },
     });
 
-    if (!access || !access.canView) {
+    if (!access || !access.canView || access.deletedAt !== null) {
       this.logger.warn(
         `User ${user.username} tidak memiliki akses ke kamera: ${path}`,
       );

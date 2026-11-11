@@ -60,7 +60,7 @@ export class CamerasService implements OnApplicationBootstrap {
     setInterval(async () => {
       try {
         const activeCameras = await this.prisma.camera.findMany({
-          where: { isActive: true },
+          where: { isActive: true, deletedAt: null },
         });
 
         if (activeCameras.length === 0) return;
@@ -103,7 +103,7 @@ export class CamerasService implements OnApplicationBootstrap {
   async syncAllToMediaMtx(): Promise<void> {
     try {
       const cameras = await this.prisma.camera.findMany({
-        where: { isActive: true },
+        where: { isActive: true, deletedAt: null },
       });
 
       if (cameras.length === 0) {
@@ -140,16 +140,18 @@ export class CamerasService implements OnApplicationBootstrap {
     let cameras;
     if (userRole === 'admin') {
       cameras = await this.prisma.camera.findMany({
+        where: { deletedAt: null },
         orderBy: { createdAt: 'desc' },
       });
     } else {
       cameras = await this.prisma.camera.findMany({
         where: {
+          deletedAt: null,
           OR: [
             { isPublic: true },
             {
               userAccess: {
-                some: { userId, canView: true },
+                some: { userId, canView: true, deletedAt: null },
               },
             },
           ],
@@ -171,6 +173,7 @@ export class CamerasService implements OnApplicationBootstrap {
       where: {
         isActive: true,
         isPublic: true,
+        deletedAt: null,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -179,10 +182,11 @@ export class CamerasService implements OnApplicationBootstrap {
   }
 
   async findOne(id: string, userId: string, userRole: string) {
-    const camera = await this.prisma.camera.findUnique({
-      where: { id },
+    const camera = await this.prisma.camera.findFirst({
+      where: { id, deletedAt: null },
       include: {
         userAccess: {
+          where: { canView: true, deletedAt: null, user: { deletedAt: null } },
           include: { user: { include: { role: true } } },
         },
       },
@@ -210,9 +214,9 @@ export class CamerasService implements OnApplicationBootstrap {
   }
 
   async create(dto: CreateCameraDto) {
-    // Cek duplikat path
-    const existing = await this.prisma.camera.findUnique({
-      where: { path: dto.path },
+    // Cek duplikat path pada kamera yang belum dihapus
+    const existing = await this.prisma.camera.findFirst({
+      where: { path: dto.path, deletedAt: null },
     });
     if (existing) {
       throw new ConflictException(`Path kamera "${dto.path}" sudah digunakan`);
@@ -241,7 +245,9 @@ export class CamerasService implements OnApplicationBootstrap {
   }
 
   async update(id: string, dto: UpdateCameraDto) {
-    const camera = await this.prisma.camera.findUnique({ where: { id } });
+    const camera = await this.prisma.camera.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
 
     const updated = await this.prisma.camera.update({
@@ -261,14 +267,32 @@ export class CamerasService implements OnApplicationBootstrap {
   }
 
   async remove(id: string) {
-    const camera = await this.prisma.camera.findUnique({ where: { id } });
+    const camera = await this.prisma.camera.findFirst({
+      where: { id, deletedAt: null },
+    });
     if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
 
-    // Hapus dari MediaMTX terlebih dahulu
+    // Hapus dari MediaMTX terlebih dahulu menggunakan path asli
     await this.mediaMtxService.removePath(camera.path);
 
-    // Hapus dari database (cascade akan menghapus UserCameraAccess juga)
-    await this.prisma.camera.delete({ where: { id } });
+    const now = new Date();
+    const archivedPath = `${camera.path.slice(0, 160)}__deleted_${now.getTime()}`;
+
+    // Soft delete kamera di database dan nonaktifkan akses user terkait
+    await this.prisma.$transaction([
+      this.prisma.userCameraAccess.updateMany({
+        where: { cameraId: id, deletedAt: null },
+        data: { canView: false, deletedAt: now },
+      }),
+      this.prisma.camera.update({
+        where: { id },
+        data: {
+          isActive: false,
+          deletedAt: now,
+          path: archivedPath,
+        },
+      }),
+    ]);
 
     return { message: `Kamera "${camera.name}" berhasil dihapus` };
   }
@@ -276,21 +300,26 @@ export class CamerasService implements OnApplicationBootstrap {
   // ───── Manajemen Akses User ─────
 
   async grantAccess(cameraId: string, dto: GrantAccessDto) {
-    const camera = await this.prisma.camera.findUnique({ where: { id: cameraId } });
+    const camera = await this.prisma.camera.findFirst({
+      where: { id: cameraId, deletedAt: null },
+    });
     if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
 
-    const user = await this.prisma.user.findUnique({ where: { id: dto.userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: dto.userId, deletedAt: null },
+    });
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     return this.prisma.userCameraAccess.upsert({
       where: {
         userId_cameraId: { userId: dto.userId, cameraId },
       },
-      update: { canView: dto.canView ?? true },
+      update: { canView: dto.canView ?? true, deletedAt: null },
       create: {
         userId: dto.userId,
         cameraId,
         canView: dto.canView ?? true,
+        deletedAt: null,
       },
     });
   }
@@ -300,21 +329,31 @@ export class CamerasService implements OnApplicationBootstrap {
       where: { userId_cameraId: { userId, cameraId } },
     });
 
-    if (!access) throw new NotFoundException('Data akses tidak ditemukan');
+    if (!access || access.deletedAt !== null || !access.canView) {
+      throw new NotFoundException('Data akses tidak ditemukan');
+    }
 
-    await this.prisma.userCameraAccess.delete({
+    await this.prisma.userCameraAccess.update({
       where: { userId_cameraId: { userId, cameraId } },
+      data: { canView: false, deletedAt: new Date() },
     });
 
     return { message: 'Akses user ke kamera berhasil dicabut' };
   }
 
   async getCameraAccess(cameraId: string) {
-    const camera = await this.prisma.camera.findUnique({ where: { id: cameraId } });
+    const camera = await this.prisma.camera.findFirst({
+      where: { id: cameraId, deletedAt: null },
+    });
     if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
 
     return this.prisma.userCameraAccess.findMany({
-      where: { cameraId },
+      where: {
+        cameraId,
+        canView: true,
+        deletedAt: null,
+        user: { deletedAt: null },
+      },
       include: {
         user: {
           include: { role: true },
@@ -324,37 +363,63 @@ export class CamerasService implements OnApplicationBootstrap {
   }
 
   async syncCameraUsers(cameraId: string, dto: SyncCameraUsersDto) {
-    const camera = await this.prisma.camera.findUnique({ where: { id: cameraId } });
+    const camera = await this.prisma.camera.findFirst({
+      where: { id: cameraId, deletedAt: null },
+    });
     if (!camera) throw new NotFoundException('Kamera tidak ditemukan');
 
-    // Verify all userIds exist
+    // Verify all userIds exist and are not soft-deleted
     if (dto.userIds.length > 0) {
       const usersCount = await this.prisma.user.count({
-        where: { id: { in: dto.userIds } }
+        where: { id: { in: dto.userIds }, deletedAt: null },
       });
       if (usersCount !== dto.userIds.length) {
         throw new NotFoundException('Satu atau lebih user tidak ditemukan');
       }
     }
 
-    // Wrap in transaction
+    // Wrap in transaction (Soft Delete & Restore without SQL DELETE)
     return this.prisma.$transaction(async (tx) => {
-      // Delete accesses that are not in the list
-      await tx.userCameraAccess.deleteMany({
+      const now = new Date();
+
+      // Soft-delete accesses that are not in the list
+      await tx.userCameraAccess.updateMany({
         where: {
           cameraId,
           userId: { notIn: dto.userIds },
+          deletedAt: null,
+        },
+        data: {
+          canView: false,
+          deletedAt: now,
         },
       });
 
-      // Get remaining accesses
+      // Restore any existing accesses that are in the list
+      if (dto.userIds.length > 0) {
+        await tx.userCameraAccess.updateMany({
+          where: {
+            cameraId,
+            userId: { in: dto.userIds },
+          },
+          data: {
+            canView: true,
+            deletedAt: null,
+          },
+        });
+      }
+
+      // Get existing rows for the requested userIds
       const existing = await tx.userCameraAccess.findMany({
-        where: { cameraId },
+        where: {
+          cameraId,
+          userId: { in: dto.userIds },
+        },
         select: { userId: true },
       });
       const existingIds = existing.map((e) => e.userId);
 
-      // Create new accesses
+      // Create new accesses for users that have never been linked yet
       const toAdd = dto.userIds.filter((id) => !existingIds.includes(id));
       if (toAdd.length > 0) {
         await tx.userCameraAccess.createMany({
@@ -362,12 +427,18 @@ export class CamerasService implements OnApplicationBootstrap {
             userId,
             cameraId,
             canView: true,
+            deletedAt: null,
           })),
         });
       }
 
       return tx.userCameraAccess.findMany({
-        where: { cameraId },
+        where: {
+          cameraId,
+          canView: true,
+          deletedAt: null,
+          user: { deletedAt: null },
+        },
         include: { user: { include: { role: true } } },
       });
     });

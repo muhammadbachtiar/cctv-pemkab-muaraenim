@@ -17,8 +17,8 @@ export class AuthService {
   ) { }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({
-      where: { username: dto.username },
+    const user = await this.prisma.user.findFirst({
+      where: { username: dto.username, deletedAt: null },
       include: { role: true },
     });
 
@@ -46,16 +46,16 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { username: dto.username },
+    const existingUser = await this.prisma.user.findFirst({
+      where: { username: dto.username, deletedAt: null },
     });
 
     if (existingUser) {
       throw new ConflictException('Username sudah digunakan');
     }
 
-    const role = await this.prisma.role.findUnique({
-      where: { id: dto.roleId },
+    const role = await this.prisma.role.findFirst({
+      where: { id: dto.roleId, deletedAt: null },
     });
 
     if (!role) {
@@ -79,7 +79,9 @@ export class AuthService {
   }
 
   async changePassword(userId: string, dto: ChangePasswordDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const isPasswordValid = await bcrypt.compare(dto.currentPassword, user.passwordHash);
@@ -97,8 +99,8 @@ export class AuthService {
   }
 
   async getProfile(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
       include: { role: true },
     });
 
@@ -109,7 +111,9 @@ export class AuthService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
     if (!user) throw new NotFoundException('User tidak ditemukan');
 
     const updated = await this.prisma.user.update({
