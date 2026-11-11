@@ -29,6 +29,7 @@ export class PrismaService
       password,
       database,
       connectionLimit: 10,
+      allowPublicKeyRetrieval: true,
     });
 
     super({ adapter });

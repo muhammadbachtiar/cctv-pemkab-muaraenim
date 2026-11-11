@@ -40,5 +40,5 @@ COPY --from=builder /app/prisma.config.js ./prisma.config.js
 
 EXPOSE 3001
 
-# Jalankan migrasi lalu start server
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+# Jalankan server tanpa migrasi otomatis
+CMD ["node", "dist/main"]
